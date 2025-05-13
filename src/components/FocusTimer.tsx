@@ -1,279 +1,189 @@
 
 import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { useToast } from "@/components/ui/use-toast";
+import { Pause, Play, RotateCcw } from "lucide-react";
 import useTimer from "@/hooks/useTimer";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Play, Pause, Timer, ArrowRight } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
-import { useQuery } from "@tanstack/react-query";
 
 interface FocusTimerProps {
   onComplete?: (focusDuration: number) => void;
 }
 
+const TIMER_PRESETS = [
+  { name: "25 min", duration: 25 },
+  { name: "45 min", duration: 45 },
+  { name: "60 min", duration: 60 },
+];
+
 const FocusTimer = ({ onComplete }: FocusTimerProps) => {
-  const [activeTab, setActiveTab] = useState<"focus" | "reward">("focus");
+  const [selectedPreset, setSelectedPreset] = useState(TIMER_PRESETS[0].duration);
+  const [customMinutes, setCustomMinutes] = useState(30);
+  const { toast } = useToast();
   const { user } = useAuth();
-  const [focusDuration, setFocusDuration] = useState(25);
   
-  // Fetch user stats from Supabase
-  const { data: userStats, refetch } = useQuery({
-    queryKey: ["timer-stats", user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      
-      const { data, error } = await supabase
-        .from("user_stats")
-        .select("total_reward_time")
-        .eq("user_id", user.id)
-        .single();
-        
-      if (error) {
-        console.error("Error fetching user stats:", error);
-        return { total_reward_time: 0 };
-      }
-      
-      return data;
-    },
-    enabled: !!user,
+  const timer = useTimer({
+    initialDuration: selectedPreset * 60,
+    onComplete: () => handleTimerComplete(selectedPreset),
   });
+
+  // Update timer duration when preset changes
+  useEffect(() => {
+    timer.setTimerDuration(selectedPreset * 60);
+  }, [selectedPreset]);
   
-  // Calculate rewards (5 min focus = 1 min reward)
-  const calculateReward = (focusMinutes: number) => Math.floor(focusMinutes / 5);
-  
-  // Focus timer settings
-  const focusTimer = useTimer({
-    initialMinutes: focusDuration,
-    onComplete: async () => {
-      // Calculate reward time
-      const newRewardTime = calculateReward(focusDuration);
-      
-      // Update stats when focus session completes
-      if (user) {
-        const { error } = await supabase
-          .from("user_stats")
-          .update({
-            total_focus_time: supabase.rpc('increment', { x: focusDuration }),
-            total_reward_time: supabase.rpc('increment', { x: newRewardTime }),
-            sessions_completed: supabase.rpc('increment', { x: 1 })
-          })
-          .eq("user_id", user.id);
-          
-        if (error) {
-          console.error("Error updating user stats:", error);
-        } else {
-          // Refetch stats after update
-          refetch();
-        }
-      }
-      
-      toast({
-        title: "Focus Session Complete!",
-        description: `You earned ${newRewardTime} minutes of reward time!`,
-      });
-      
-      if (onComplete) onComplete(focusDuration);
-    }
-  });
-  
-  // Reward timer settings
-  const rewardTimer = useTimer({
-    initialMinutes: 5
-  });
-  
-  // Set up durations
-  const focusDurations = [5, 15, 25, 45];
-  const rewardDurations = [5, 10, 15, 20];
-  
-  // Active timer based on tab
-  const activeTimer = activeTab === "focus" ? focusTimer : rewardTimer;
-  
-  const handleStartFocus = () => {
-    focusTimer.startTimer();
-  };
-  
-  const handleStartReward = async () => {
-    const availableRewardTime = userStats?.total_reward_time || 0;
+  const handleTimerComplete = async (focusDuration: number) => {
+    // Show completion toast
+    toast({
+      title: "Focus session completed!",
+      description: `You've completed a ${focusDuration} minute focus session.`,
+      variant: "success",
+    });
     
-    if (availableRewardTime <= 0) {
-      toast({
-        title: "No Reward Time Available",
-        description: "Complete focus sessions to earn reward time.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const rewardDuration = rewardTimer.initialMinutes;
-    
-    if (rewardDuration > availableRewardTime) {
-      toast({
-        title: "Not Enough Reward Time",
-        description: `You only have ${availableRewardTime} minutes available.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Start the reward timer
-    rewardTimer.startTimer();
-    
-    // Deduct time from available reward time
-    if (user) {
-      const { error } = await supabase
-        .from("user_stats")
-        .update({
-          total_reward_time: supabase.rpc('decrement', { x: rewardDuration })
-        })
-        .eq("user_id", user.id);
-        
-      if (error) {
-        console.error("Error updating reward time:", error);
-      } else {
-        // Refetch stats after update
-        refetch();
-      }
+    if (onComplete) {
+      onComplete(focusDuration);
     }
   };
+
+  const handleCustomSliderChange = (newValue: number[]) => {
+    setCustomMinutes(newValue[0]);
+  };
   
+  const applyCustomDuration = () => {
+    setSelectedPreset(customMinutes);
+    timer.setTimerDuration(customMinutes * 60);
+    timer.resetTimer();
+  };
+
   return (
-    <Card className="w-full mb-6">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <CardTitle>Timer</CardTitle>
-          <div className="text-sm text-muted-foreground flex items-center gap-1">
-            <Timer className="h-4 w-4" />
-            <span>Available Reward: {userStats?.total_reward_time || 0} mins</span>
+    <Card className="w-full">
+      <CardContent className="p-6">
+        <div className="flex flex-col items-center">
+          <div className="relative flex items-center justify-center mb-6 w-60 h-60">
+            {/* Circular progress indicator */}
+            <svg className="w-full h-full transform -rotate-90">
+              <circle
+                cx="120"
+                cy="120"
+                r="112"
+                stroke="currentColor"
+                strokeWidth="8"
+                fill="transparent"
+                className="text-muted stroke-1"
+              />
+              <circle
+                cx="120"
+                cy="120"
+                r="112"
+                stroke="currentColor"
+                strokeWidth="8"
+                fill="transparent"
+                strokeLinecap="round"
+                className="text-primary"
+                strokeDasharray={704}
+                strokeDashoffset={704 - (timer.progressPercentage / 100) * 704}
+              />
+            </svg>
+            
+            {/* Timer display */}
+            <div className="absolute flex flex-col items-center">
+              <span className="text-6xl font-bold">{timer.formattedTime}</span>
+              <span className="text-sm text-muted-foreground">
+                {timer.isActive
+                  ? timer.isPaused
+                    ? "Paused"
+                    : "Focus Time"
+                  : `${selectedPreset} min`}
+              </span>
+            </div>
           </div>
+
+          {/* Timer controls */}
+          <div className="flex space-x-4 mb-6">
+            {timer.isActive ? (
+              <>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={timer.resetTimer}
+                  className="w-12 h-12 rounded-full p-0"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={timer.isPaused ? timer.resumeTimer : timer.pauseTimer}
+                  className="w-20 h-12 rounded-full"
+                >
+                  {timer.isPaused ? (
+                    <Play className="h-5 w-5 mr-1" />
+                  ) : (
+                    <Pause className="h-5 w-5 mr-1" />
+                  )}
+                  {timer.isPaused ? "Resume" : "Pause"}
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="lg"
+                onClick={timer.startTimer}
+                className="w-32 h-12 rounded-full bg-grindtime-blue hover:bg-grindtime-blue/90"
+              >
+                <Play className="h-5 w-5 mr-1" /> Start Focus
+              </Button>
+            )}
+          </div>
+
+          {/* Presets and custom duration */}
+          <Tabs defaultValue="presets" className="w-full">
+            <TabsList className="grid grid-cols-2 mb-4">
+              <TabsTrigger value="presets">Quick Presets</TabsTrigger>
+              <TabsTrigger value="custom">Custom Duration</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="presets" className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                {TIMER_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.name}
+                    variant={selectedPreset === preset.duration ? "default" : "outline"}
+                    className={selectedPreset === preset.duration ? "bg-grindtime-blue hover:bg-grindtime-blue/90" : ""}
+                    onClick={() => {
+                      setSelectedPreset(preset.duration);
+                      timer.setTimerDuration(preset.duration * 60);
+                      timer.resetTimer();
+                    }}
+                  >
+                    {preset.name}
+                  </Button>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="custom">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span>Duration: {customMinutes} minutes</span>
+                </div>
+                <Slider
+                  value={[customMinutes]}
+                  min={5}
+                  max={120}
+                  step={5}
+                  onValueChange={handleCustomSliderChange}
+                />
+                <Button onClick={applyCustomDuration} className="w-full bg-grindtime-blue hover:bg-grindtime-blue/90">
+                  Apply Custom Duration
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="focus" value={activeTab} onValueChange={(value) => setActiveTab(value as "focus" | "reward")} className="w-full">
-          <TabsList className="grid grid-cols-2 mb-4">
-            <TabsTrigger value="focus">Focus Time</TabsTrigger>
-            <TabsTrigger value="reward">Reward Time</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="focus" className="mt-0">
-            <div className="flex flex-col items-center">
-              {!focusTimer.isActive && (
-                <div className="mb-4 flex flex-wrap gap-2 justify-center">
-                  {focusDurations.map(duration => (
-                    <Button 
-                      key={duration} 
-                      variant={focusDuration === duration ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setFocusDuration(duration);
-                        focusTimer.setTimerDuration(duration);
-                      }}
-                    >
-                      {duration} min
-                    </Button>
-                  ))}
-                </div>
-              )}
-              
-              <div className="timer-display my-6">
-                {focusTimer.formattedTime}
-              </div>
-              
-              <div className="w-full bg-secondary rounded-full h-2 mb-8">
-                <div 
-                  className="bg-gradient-to-r from-grindtime-green to-grindtime-blue h-2 rounded-full" 
-                  style={{ width: `${focusTimer.progressPercentage}%` }}
-                ></div>
-              </div>
-              
-              <div className="flex justify-center gap-3">
-                {!focusTimer.isActive ? (
-                  <Button className="px-8" onClick={handleStartFocus}>
-                    <Play className="mr-2 h-4 w-4" /> Start Focus
-                  </Button>
-                ) : !focusTimer.isPaused ? (
-                  <Button variant="outline" onClick={focusTimer.pauseTimer}>
-                    <Pause className="mr-2 h-4 w-4" /> Pause
-                  </Button>
-                ) : (
-                  <Button variant="default" onClick={focusTimer.resumeTimer}>
-                    <Play className="mr-2 h-4 w-4" /> Resume
-                  </Button>
-                )}
-                
-                {(focusTimer.isActive || focusTimer.timeLeft < focusDuration * 60) && (
-                  <Button variant="destructive" onClick={focusTimer.resetTimer}>
-                    Reset
-                  </Button>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="reward" className="mt-0">
-            <div className="flex flex-col items-center">
-              {!rewardTimer.isActive && (
-                <div className="mb-4 flex flex-wrap gap-2 justify-center">
-                  {rewardDurations.map(duration => (
-                    <Button 
-                      key={duration} 
-                      variant="outline"
-                      size="sm"
-                      disabled={!userStats || userStats.total_reward_time < duration}
-                      onClick={() => {
-                        rewardTimer.setTimerDuration(duration);
-                      }}
-                    >
-                      {duration} min
-                    </Button>
-                  ))}
-                </div>
-              )}
-              
-              <div className="timer-display my-6">
-                {rewardTimer.formattedTime}
-              </div>
-              
-              <div className="w-full bg-secondary rounded-full h-2 mb-8">
-                <div 
-                  className="bg-gradient-to-r from-grindtime-purple to-grindtime-blue h-2 rounded-full" 
-                  style={{ width: `${rewardTimer.progressPercentage}%` }}
-                ></div>
-              </div>
-              
-              <div className="flex justify-center gap-3">
-                {!rewardTimer.isActive ? (
-                  <Button 
-                    className="px-8 bg-grindtime-purple hover:bg-grindtime-purple/90" 
-                    onClick={handleStartReward}
-                    disabled={!userStats || userStats.total_reward_time <= 0}
-                  >
-                    <ArrowRight className="mr-2 h-4 w-4" /> Start Reward
-                  </Button>
-                ) : !rewardTimer.isPaused ? (
-                  <Button variant="outline" onClick={rewardTimer.pauseTimer}>
-                    <Pause className="mr-2 h-4 w-4" /> Pause
-                  </Button>
-                ) : (
-                  <Button 
-                    className="bg-grindtime-purple hover:bg-grindtime-purple/90" 
-                    onClick={rewardTimer.resumeTimer}
-                  >
-                    <Play className="mr-2 h-4 w-4" /> Resume
-                  </Button>
-                )}
-                
-                {(rewardTimer.isActive || rewardTimer.timeLeft < rewardTimer.initialMinutes * 60) && (
-                  <Button variant="destructive" onClick={rewardTimer.resetTimer}>
-                    Reset
-                  </Button>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
       </CardContent>
     </Card>
   );

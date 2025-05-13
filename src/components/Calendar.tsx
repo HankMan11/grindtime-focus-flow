@@ -52,7 +52,7 @@ const CalendarComponent = () => {
     },
   });
 
-  // Fetch events from Supabase
+  // Fetch events from Supabase - RLS will automatically restrict to current user's events
   const { data: events = [], refetch } = useQuery({
     queryKey: ["calendar-events", user?.id],
     queryFn: async () => {
@@ -85,7 +85,14 @@ const CalendarComponent = () => {
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to create events",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       // Combine date with time strings
@@ -127,7 +134,7 @@ const CalendarComponent = () => {
   return (
     <Card className="w-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-lg">Calendar</CardTitle>
+        <CardTitle className="text-lg">My Calendar</CardTitle>
         <Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline">
