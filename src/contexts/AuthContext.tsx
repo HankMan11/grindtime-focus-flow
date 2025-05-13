@@ -31,18 +31,51 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     console.log("AuthProvider initializing");
     
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.id);
-        setSession(session);
-        setUser(session?.user ?? null);
+    const setupAuth = async () => {
+      try {
+        // Set up auth state listener FIRST
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log("Auth state changed:", event, session?.user?.id);
+            setSession(session);
+            setUser(session?.user ?? null);
+            
+            if (session?.user) {
+              // Fetch user profile from localStorage
+              const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
+              if (storedProfile) {
+                console.log("Found stored profile for user", session.user.id);
+                const profile = JSON.parse(storedProfile);
+                
+                // Auto-capitalize username if it exists
+                if (profile.username) {
+                  profile.username = capitalizeUsername(profile.username);
+                }
+                
+                setUserProfile(profile);
+              } else {
+                console.log("No stored profile found for user", session.user.id);
+                setUserProfile(null);
+              }
+            } else {
+              setUserProfile(null);
+            }
+            
+            setIsLoading(false);
+          }
+        );
+
+        // THEN check for existing session
+        const { data } = await supabase.auth.getSession();
+        console.log("Initial session check:", data.session?.user?.id);
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
         
-        if (session?.user) {
+        if (data.session?.user) {
           // Fetch user profile from localStorage
-          const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
+          const storedProfile = localStorage.getItem(`profile-${data.session.user.id}`);
           if (storedProfile) {
-            console.log("Found stored profile for user", session.user.id);
+            console.log("Found stored profile for user", data.session.user.id);
             const profile = JSON.parse(storedProfile);
             
             // Auto-capitalize username if it exists
@@ -52,48 +85,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             
             setUserProfile(profile);
           } else {
-            console.log("No stored profile found for user", session.user.id);
-            setUserProfile(null);
+            console.log("No stored profile found for user", data.session.user.id);
           }
-        } else {
-          setUserProfile(null);
         }
         
         setIsLoading(false);
+        
+        return () => {
+          console.log("Cleaning up auth subscription");
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        console.error("Error in auth setup:", error);
+        setIsLoading(false);
       }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("Initial session check:", session?.user?.id);
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        // Fetch user profile from localStorage
-        const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
-        if (storedProfile) {
-          console.log("Found stored profile for user", session.user.id);
-          const profile = JSON.parse(storedProfile);
-          
-          // Auto-capitalize username if it exists
-          if (profile.username) {
-            profile.username = capitalizeUsername(profile.username);
-          }
-          
-          setUserProfile(profile);
-        } else {
-          console.log("No stored profile found for user", session.user.id);
-        }
-      }
-      
-      setIsLoading(false);
-    });
-
-    return () => {
-      console.log("Cleaning up auth subscription");
-      subscription.unsubscribe();
     };
+    
+    setupAuth();
   }, []);
 
   // Function to capitalize username
