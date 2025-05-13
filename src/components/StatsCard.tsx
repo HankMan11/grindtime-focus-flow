@@ -1,43 +1,52 @@
 
-import { useEffect, useState } from "react";
-import useLocalStorage from "@/hooks/useLocalStorage";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Award, Timer } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface Stats {
-  totalFocusTime: number; // in minutes
-  totalRewardTime: number; // in minutes
-  sessionsCompleted: number;
-  homeworkLogged: number;
+  total_focus_time: number; // in minutes
+  total_reward_time: number; // in minutes
+  sessions_completed: number;
+  homework_logged: number;
 }
 
 const StatsCard = () => {
-  const [stats, setStats] = useLocalStorage<Stats>("grindtime-stats", {
-    totalFocusTime: 0,
-    totalRewardTime: 0,
-    sessionsCompleted: 0,
-    homeworkLogged: 0,
+  const { user } = useAuth();
+  
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["stats-card", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from("user_stats")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching user stats:", error);
+        return {
+          total_focus_time: 0,
+          total_reward_time: 0,
+          sessions_completed: 0,
+          homework_logged: 0
+        };
+      }
+      
+      return data as Stats;
+    },
+    enabled: !!user,
   });
   
-  const formatTime = (minutes: number) => {
+  const formatTime = (minutes: number = 0) => {
     if (minutes < 60) return `${minutes} mins`;
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
     return `${hours}h ${remainingMinutes}m`;
   };
-  
-  // Sample data for testing - remove in production
-  useEffect(() => {
-    if (stats.totalFocusTime === 0) {
-      setStats({
-        totalFocusTime: 125, // 2h 5m
-        totalRewardTime: 25,
-        sessionsCompleted: 5,
-        homeworkLogged: 3,
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -49,7 +58,9 @@ const StatsCard = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 pt-0">
-          <p className="text-xl font-bold">{formatTime(stats.totalFocusTime)}</p>
+          <p className="text-xl font-bold">
+            {isLoading ? "..." : formatTime(stats?.total_focus_time || 0)}
+          </p>
         </CardContent>
       </Card>
       
@@ -61,7 +72,9 @@ const StatsCard = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 pt-0">
-          <p className="text-xl font-bold">{formatTime(stats.totalRewardTime)}</p>
+          <p className="text-xl font-bold">
+            {isLoading ? "..." : formatTime(stats?.total_reward_time || 0)}
+          </p>
         </CardContent>
       </Card>
       
@@ -73,7 +86,9 @@ const StatsCard = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 pt-0">
-          <p className="text-xl font-bold">{stats.sessionsCompleted}</p>
+          <p className="text-xl font-bold">
+            {isLoading ? "..." : stats?.sessions_completed || 0}
+          </p>
         </CardContent>
       </Card>
       
@@ -85,7 +100,9 @@ const StatsCard = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 pt-0">
-          <p className="text-xl font-bold">{stats.homeworkLogged}</p>
+          <p className="text-xl font-bold">
+            {isLoading ? "..." : stats?.homework_logged || 0}
+          </p>
         </CardContent>
       </Card>
     </div>

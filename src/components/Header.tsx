@@ -2,11 +2,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import NotificationsCenter from "./NotificationsCenter";
 
 const Header = () => {
   const [activePage, setActivePage] = useState("home");
@@ -67,10 +68,7 @@ const Header = () => {
         <div className="flex items-center space-x-3">
           {user ? (
             <>
-              <Button size="icon" variant="ghost" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-0 right-0 w-2 h-2 bg-grindtime-purple rounded-full"></span>
-              </Button>
+              <NotificationsCenter />
               <Avatar className="h-8 w-8 border-2 border-grindtime-green">
                 {userProfile?.avatar_url ? (
                   <AvatarImage src={userProfile.avatar_url} alt={userProfile.username || "User"} />

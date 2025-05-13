@@ -1,54 +1,81 @@
 
 import { useState, useEffect } from "react";
 import useTimer from "@/hooks/useTimer";
-import useLocalStorage from "@/hooks/useLocalStorage";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Play, Pause, Timer, ArrowRight } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 interface FocusTimerProps {
-  onComplete?: () => void;
-}
-
-interface FocusStats {
-  totalFocusTime: number; // in minutes
-  totalRewardTime: number; // in minutes
-  sessionsCompleted: number;
+  onComplete?: (focusDuration: number) => void;
 }
 
 const FocusTimer = ({ onComplete }: FocusTimerProps) => {
   const [activeTab, setActiveTab] = useState<"focus" | "reward">("focus");
-  const [stats, setStats] = useLocalStorage<FocusStats>("grindtime-stats", {
-    totalFocusTime: 0,
-    totalRewardTime: 0,
-    sessionsCompleted: 0,
+  const { user } = useAuth();
+  const [focusDuration, setFocusDuration] = useState(25);
+  
+  // Fetch user stats from Supabase
+  const { data: userStats, refetch } = useQuery({
+    queryKey: ["timer-stats", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from("user_stats")
+        .select("total_reward_time")
+        .eq("user_id", user.id)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching user stats:", error);
+        return { total_reward_time: 0 };
+      }
+      
+      return data;
+    },
+    enabled: !!user,
   });
   
   // Calculate rewards (5 min focus = 1 min reward)
   const calculateReward = (focusMinutes: number) => Math.floor(focusMinutes / 5);
   
   // Focus timer settings
-  const [focusDuration, setFocusDuration] = useState(25);
   const focusTimer = useTimer({
     initialMinutes: focusDuration,
-    onComplete: () => {
-      // Update stats when focus session completes
+    onComplete: async () => {
+      // Calculate reward time
       const newRewardTime = calculateReward(focusDuration);
-      setStats(prev => ({
-        ...prev,
-        totalFocusTime: prev.totalFocusTime + focusDuration,
-        totalRewardTime: prev.totalRewardTime + newRewardTime,
-        sessionsCompleted: prev.sessionsCompleted + 1,
-      }));
+      
+      // Update stats when focus session completes
+      if (user) {
+        const { error } = await supabase
+          .from("user_stats")
+          .update({
+            total_focus_time: supabase.rpc('increment', { x: focusDuration }),
+            total_reward_time: supabase.rpc('increment', { x: newRewardTime }),
+            sessions_completed: supabase.rpc('increment', { x: 1 })
+          })
+          .eq("user_id", user.id);
+          
+        if (error) {
+          console.error("Error updating user stats:", error);
+        } else {
+          // Refetch stats after update
+          refetch();
+        }
+      }
       
       toast({
         title: "Focus Session Complete!",
         description: `You earned ${newRewardTime} minutes of reward time!`,
       });
       
-      if (onComplete) onComplete();
+      if (onComplete) onComplete(focusDuration);
     }
   });
   
@@ -68,8 +95,10 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
     focusTimer.startTimer();
   };
   
-  const handleStartReward = () => {
-    if (stats.totalRewardTime <= 0) {
+  const handleStartReward = async () => {
+    const availableRewardTime = userStats?.total_reward_time || 0;
+    
+    if (availableRewardTime <= 0) {
       toast({
         title: "No Reward Time Available",
         description: "Complete focus sessions to earn reward time.",
@@ -78,13 +107,36 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
       return;
     }
     
+    const rewardDuration = rewardTimer.initialMinutes;
+    
+    if (rewardDuration > availableRewardTime) {
+      toast({
+        title: "Not Enough Reward Time",
+        description: `You only have ${availableRewardTime} minutes available.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Start the reward timer
     rewardTimer.startTimer();
     
     // Deduct time from available reward time
-    setStats(prev => ({
-      ...prev,
-      totalRewardTime: Math.max(0, prev.totalRewardTime - 5),
-    }));
+    if (user) {
+      const { error } = await supabase
+        .from("user_stats")
+        .update({
+          total_reward_time: supabase.rpc('decrement', { x: rewardDuration })
+        })
+        .eq("user_id", user.id);
+        
+      if (error) {
+        console.error("Error updating reward time:", error);
+      } else {
+        // Refetch stats after update
+        refetch();
+      }
+    }
   };
   
   return (
@@ -94,7 +146,7 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
           <CardTitle>Timer</CardTitle>
           <div className="text-sm text-muted-foreground flex items-center gap-1">
             <Timer className="h-4 w-4" />
-            <span>Available Reward: {stats.totalRewardTime} mins</span>
+            <span>Available Reward: {userStats?.total_reward_time || 0} mins</span>
           </div>
         </div>
       </CardHeader>
@@ -169,7 +221,7 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
                       key={duration} 
                       variant="outline"
                       size="sm"
-                      disabled={stats.totalRewardTime < duration}
+                      disabled={!userStats || userStats.total_reward_time < duration}
                       onClick={() => {
                         rewardTimer.setTimerDuration(duration);
                       }}
@@ -196,7 +248,7 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
                   <Button 
                     className="px-8 bg-grindtime-purple hover:bg-grindtime-purple/90" 
                     onClick={handleStartReward}
-                    disabled={stats.totalRewardTime <= 0}
+                    disabled={!userStats || userStats.total_reward_time <= 0}
                   >
                     <ArrowRight className="mr-2 h-4 w-4" /> Start Reward
                   </Button>
@@ -213,7 +265,7 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
                   </Button>
                 )}
                 
-                {(rewardTimer.isActive || rewardTimer.timeLeft < 5 * 60) && (
+                {(rewardTimer.isActive || rewardTimer.timeLeft < rewardTimer.initialMinutes * 60) && (
                   <Button variant="destructive" onClick={rewardTimer.resetTimer}>
                     Reset
                   </Button>

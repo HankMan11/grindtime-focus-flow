@@ -43,7 +43,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
           if (storedProfile) {
             console.log("Found stored profile for user", session.user.id);
-            setUserProfile(JSON.parse(storedProfile));
+            const profile = JSON.parse(storedProfile);
+            
+            // Auto-capitalize username if it exists
+            if (profile.username) {
+              profile.username = capitalizeUsername(profile.username);
+            }
+            
+            setUserProfile(profile);
           } else {
             console.log("No stored profile found for user", session.user.id);
             setUserProfile(null);
@@ -67,7 +74,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
         if (storedProfile) {
           console.log("Found stored profile for user", session.user.id);
-          setUserProfile(JSON.parse(storedProfile));
+          const profile = JSON.parse(storedProfile);
+          
+          // Auto-capitalize username if it exists
+          if (profile.username) {
+            profile.username = capitalizeUsername(profile.username);
+          }
+          
+          setUserProfile(profile);
         } else {
           console.log("No stored profile found for user", session.user.id);
         }
@@ -81,6 +95,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Function to capitalize username
+  const capitalizeUsername = (username: string): string => {
+    return username
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   return (
     <AuthContext.Provider value={{ user, session, isLoading, userProfile }}>

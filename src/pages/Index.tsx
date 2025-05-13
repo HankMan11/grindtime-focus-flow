@@ -6,25 +6,41 @@ import StreakDisplay from "@/components/StreakDisplay";
 import StatsCard from "@/components/StatsCard";
 import HomeworkLogger from "@/components/HomeworkLogger";
 import RewardBank from "@/components/RewardBank";
+import Calendar from "@/components/Calendar";
+import StatsPage from "@/components/StatsPage";
 import useStreak from "@/hooks/useStreak";
-import useLocalStorage from "@/hooks/useLocalStorage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const { currentStreak, longestStreak, dailyGoalMet, markDailyGoalComplete } = useStreak();
-  const { userProfile } = useAuth();
-  const [stats, setStats] = useLocalStorage("grindtime-stats", {
-    totalFocusTime: 0,
-    totalRewardTime: 0,
-    sessionsCompleted: 0,
-    homeworkLogged: 0,
-  });
-
-  // Handle timer completion - update streak
-  const handleSessionComplete = () => {
+  const { userProfile, user } = useAuth();
+  
+  // Handle timer completion - update streak and user stats
+  const handleSessionComplete = async (focusDuration: number) => {
+    // Mark daily goal complete for streak
     markDailyGoalComplete();
+    
+    // Update user stats in Supabase
+    if (user) {
+      const rewardTime = Math.floor(focusDuration / 5); // 5 mins focus = 1 min reward
+      
+      const { error } = await supabase
+        .from("user_stats")
+        .update({
+          total_focus_time: supabase.rpc('increment', { x: focusDuration }),
+          total_reward_time: supabase.rpc('increment', { x: rewardTime }),
+          sessions_completed: supabase.rpc('increment', { x: 1 })
+        })
+        .eq("user_id", user.id);
+        
+      if (error) {
+        console.error("Error updating user stats:", error);
+      }
+    }
   };
 
   return (
@@ -33,22 +49,47 @@ const Index = () => {
         Welcome{userProfile?.username ? `, ${userProfile.username}` : " to GrindTime"}
       </h1>
       
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 space-y-6">
-          <FocusTimer onComplete={handleSessionComplete} />
-          <HomeworkLogger />
-        </div>
+      <Tabs defaultValue="dashboard">
+        <TabsList className="w-full mb-6">
+          <TabsTrigger value="dashboard" className="flex-1">Dashboard</TabsTrigger>
+          <TabsTrigger value="timer" className="flex-1">Focus Timer</TabsTrigger>
+          <TabsTrigger value="calendar" className="flex-1">Calendar</TabsTrigger>
+          <TabsTrigger value="stats" className="flex-1">Stats</TabsTrigger>
+        </TabsList>
         
-        <div className="space-y-6">
-          <RewardBank />
-          <StreakDisplay 
-            currentStreak={currentStreak}
-            longestStreak={longestStreak}
-            dailyGoalMet={dailyGoalMet}
-          />
-          <StatsCard />
-        </div>
-      </div>
+        <TabsContent value="dashboard">
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+              <FocusTimer onComplete={handleSessionComplete} />
+              <HomeworkLogger />
+            </div>
+            
+            <div className="space-y-6">
+              <RewardBank />
+              <StreakDisplay 
+                currentStreak={currentStreak}
+                longestStreak={longestStreak}
+                dailyGoalMet={dailyGoalMet}
+              />
+              <StatsCard />
+            </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="timer">
+          <div className="max-w-md mx-auto">
+            <FocusTimer onComplete={handleSessionComplete} />
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="calendar">
+          <Calendar />
+        </TabsContent>
+        
+        <TabsContent value="stats">
+          <StatsPage />
+        </TabsContent>
+      </Tabs>
       
       <Card className="mt-8 bg-grindtime-blue/10">
         <CardContent className="p-4 text-center">

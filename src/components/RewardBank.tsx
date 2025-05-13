@@ -1,22 +1,43 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import useLocalStorage from "@/hooks/useLocalStorage";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Timer } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface RewardBankProps {
   totalRewardTime?: number;
 }
 
 const RewardBank = ({ totalRewardTime }: RewardBankProps) => {
-  const [stats] = useLocalStorage("grindtime-stats", {
-    totalFocusTime: 0,
-    totalRewardTime: 0,
-    sessionsCompleted: 0,
+  const { user } = useAuth();
+  
+  const { data: userStats } = useQuery({
+    queryKey: ["user-stats-reward", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from("user_stats")
+        .select("total_reward_time")
+        .eq("user_id", user.id)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching user stats:", error);
+        return { total_reward_time: 0 };
+      }
+      
+      return data;
+    },
+    enabled: !!user,
   });
   
-  // Use props value if provided, otherwise use from localStorage
-  const rewardTime = totalRewardTime !== undefined ? totalRewardTime : stats.totalRewardTime;
+  // Use props value if provided, otherwise use from Supabase
+  const rewardTime = totalRewardTime !== undefined 
+    ? totalRewardTime 
+    : (userStats?.total_reward_time || 0);
   
   // Calculate the progress percentage (max 100 minutes for display purposes)
   const progressPercentage = Math.min(100, (rewardTime / 100) * 100);
