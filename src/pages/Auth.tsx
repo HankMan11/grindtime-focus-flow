@@ -113,7 +113,12 @@ const Auth = () => {
   };
 
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev === slides.length - 1 ? prev : prev + 1));
+    if (currentSlide === slides.length - 1) {
+      // When on the last slide, show the auth form instead of moving to next slide
+      setCurrentSlide(slides.length);
+    } else {
+      setCurrentSlide((prev) => prev + 1);
+    }
   };
 
   const prevSlide = () => {
