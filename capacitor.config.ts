@@ -10,7 +10,12 @@ const config: CapacitorConfig = {
     cleartext: true
   },
   ios: {
-    scheme: 'GrindTimeFocusFlow'
+    scheme: 'GrindTimeFocusFlow',
+    contentInset: 'always',
+    webViewAllowingInlineMediaPlayback: true,
+    limitsNavigationsToAppBoundDomains: true,
+    scrollEnabled: true,
+    allowsLinkPreview: false
   }
 };
 
