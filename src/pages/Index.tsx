@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import FocusTimer from "@/components/FocusTimer";
 import StreakDisplay from "@/components/StreakDisplay";
@@ -26,19 +26,22 @@ const Index = () => {
     
     // Update user stats in Supabase
     if (user) {
-      const rewardTime = Math.floor(focusDuration / 5); // 5 mins focus = 1 min reward
-      
-      const { error } = await supabase
-        .from("user_stats")
-        .update({
-          total_focus_time: supabase.rpc('increment', { x: focusDuration }),
-          total_reward_time: supabase.rpc('increment', { x: rewardTime }),
-          sessions_completed: supabase.rpc('increment', { x: 1 })
-        })
-        .eq("user_id", user.id);
-        
-      if (error) {
-        console.error("Error updating user stats:", error);
+      try {
+        // Using proper increment function with typed parameters
+        const { error } = await supabase
+          .from("user_stats")
+          .update({
+            total_focus_time: supabase.rpc('increment', { x: focusDuration }),
+            total_reward_time: supabase.rpc('increment', { x: Math.floor(focusDuration / 5) }),
+            sessions_completed: supabase.rpc('increment', { x: 1 })
+          })
+          .eq("user_id", user.id);
+          
+        if (error) {
+          console.error("Error updating user stats:", error);
+        }
+      } catch (error) {
+        console.error("Error in session completion:", error);
       }
     }
   };

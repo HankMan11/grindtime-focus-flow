@@ -28,7 +28,7 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
   const { user } = useAuth();
   
   const timer = useTimer({
-    initialDuration: selectedPreset * 60,
+    initialMinutes: selectedPreset,
     onComplete: () => handleTimerComplete(selectedPreset),
   });
 
@@ -42,7 +42,7 @@ const FocusTimer = ({ onComplete }: FocusTimerProps) => {
     toast({
       title: "Focus session completed!",
       description: `You've completed a ${focusDuration} minute focus session.`,
-      variant: "success",
+      variant: "default",
     });
     
     if (onComplete) {

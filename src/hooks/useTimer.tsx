@@ -50,8 +50,8 @@ const useTimer = ({ initialMinutes = 25, onComplete, autoStart = false }: TimerO
   }, [initialMinutes]);
   
   // Set custom timer duration
-  const setTimerDuration = useCallback((minutes: number) => {
-    setTimeLeft(minutes * 60);
+  const setTimerDuration = useCallback((seconds: number) => {
+    setTimeLeft(seconds);
   }, []);
   
   // Progress percentage

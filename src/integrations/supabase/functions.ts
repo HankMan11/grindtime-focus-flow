@@ -44,7 +44,7 @@ export const ensureUserStats = async (userId: string) => {
 // Function to increment a specific field in user stats
 export const incrementUserStat = async (
   userId: string,
-  field: string,
+  field: "total_focus_time" | "total_reward_time" | "sessions_completed" | "homework_logged",
   amount: number
 ) => {
   if (!userId) return;
@@ -52,7 +52,7 @@ export const incrementUserStat = async (
   // Ensure user stats exist
   await ensureUserStats(userId);
   
-  // Update the specified field
+  // Update the specified field using a type-safe approach
   const { error } = await supabase
     .from("user_stats")
     .update({ [field]: supabase.rpc('increment', { x: amount }) })
