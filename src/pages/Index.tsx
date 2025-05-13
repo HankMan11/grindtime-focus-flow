@@ -31,9 +31,9 @@ const Index = () => {
         const { error } = await supabase
           .from("user_stats")
           .update({
-            total_focus_time: supabase.rpc('increment', { x: focusDuration }),
-            total_reward_time: supabase.rpc('increment', { x: Math.floor(focusDuration / 5) }),
-            sessions_completed: supabase.rpc('increment', { x: 1 })
+            total_focus_time: focusDuration,
+            total_reward_time: Math.floor(focusDuration / 5),
+            sessions_completed: 1
           })
           .eq("user_id", user.id);
           
@@ -52,7 +52,7 @@ const Index = () => {
         Welcome{userProfile?.username ? `, ${userProfile.username}` : " to GrindTime"}
       </h1>
       
-      <Tabs defaultValue="dashboard">
+      <Tabs defaultValue="calendar">
         <TabsList className="w-full mb-6">
           <TabsTrigger value="dashboard" className="flex-1">Dashboard</TabsTrigger>
           <TabsTrigger value="timer" className="flex-1">Focus Timer</TabsTrigger>
