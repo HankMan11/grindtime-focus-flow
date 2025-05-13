@@ -31,7 +31,7 @@ const signupSchema = z.object({
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("login");
+  const [activeTab, setActiveTab] = useState("signup");
   const [currentSlide, setCurrentSlide] = useState(0);
   const navigate = useNavigate();
   
@@ -183,24 +183,29 @@ const Auth = () => {
           <>
             <div className="text-center mb-8">
               <span className="font-bold text-2xl text-grindtime-blue">Grind<span className="text-grindtime-purple">Time</span></span>
-              <p className="text-muted-foreground mt-2">Sign in to track your productivity and earn rewards</p>
+              <p className="text-muted-foreground mt-2">Sign up to start your productivity journey</p>
             </div>
             
-            <Card className="w-full">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-2 w-full">
-                  <TabsTrigger value="login">
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Login
-                  </TabsTrigger>
-                  <TabsTrigger value="signup">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Sign Up
-                  </TabsTrigger>
-                </TabsList>
-                
-                <CardContent className="pt-6">
-                  <TabsContent value="login" className="mt-0">
+            <div className="w-full relative">
+              {/* Small login button */}
+              <div className="absolute right-0 top-0 mb-4">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setActiveTab("login")}
+                  className={activeTab === "login" ? "border-b-2 border-primary rounded-none px-2" : "px-2"}
+                >
+                  Already have an account? <LogIn className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+              
+              <Card className="w-full mt-8">
+                {activeTab === "login" ? (
+                  <CardContent className="pt-6">
+                    <div className="mb-6">
+                      <h2 className="text-xl font-semibold mb-2">Welcome Back</h2>
+                      <p className="text-sm text-muted-foreground">Sign in to continue your productivity journey</p>
+                    </div>
                     <Form {...loginForm}>
                       <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
                         <FormField
@@ -231,14 +236,31 @@ const Auth = () => {
                           )}
                         />
                         
-                        <Button type="submit" className="w-full" disabled={isLoading}>
-                          {isLoading ? "Logging in..." : "Login"}
-                        </Button>
+                        <div className="pt-2">
+                          <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? "Signing in..." : "Sign In"}
+                          </Button>
+                        </div>
+                        
+                        <div className="text-center mt-4">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setActiveTab("signup")}
+                            className="text-sm text-muted-foreground hover:text-primary"
+                          >
+                            Need an account? Sign up
+                          </Button>
+                        </div>
                       </form>
                     </Form>
-                  </TabsContent>
-                  
-                  <TabsContent value="signup" className="mt-0">
+                  </CardContent>
+                ) : (
+                  <CardContent className="pt-6">
+                    <div className="mb-6">
+                      <h2 className="text-xl font-semibold mb-2">Create Your Account</h2>
+                      <p className="text-sm text-muted-foreground">Start your productivity journey today</p>
+                    </div>
                     <Form {...signupForm}>
                       <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
                         <FormField
@@ -262,7 +284,7 @@ const Auth = () => {
                             <FormItem>
                               <FormLabel>Password</FormLabel>
                               <FormControl>
-                                <Input type="password" placeholder="Your password" {...field} />
+                                <Input type="password" placeholder="Create a password" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -276,22 +298,25 @@ const Auth = () => {
                             <FormItem>
                               <FormLabel>Confirm Password</FormLabel>
                               <FormControl>
-                                <Input type="password" placeholder="Confirm password" {...field} />
+                                <Input type="password" placeholder="Confirm your password" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                         
-                        <Button type="submit" className="w-full" disabled={isLoading}>
-                          {isLoading ? "Signing up..." : "Sign Up"}
-                        </Button>
+                        <div className="pt-2">
+                          <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? "Creating Account..." : "Create Account"}
+                            <UserPlus className="ml-2 h-4 w-4" />
+                          </Button>
+                        </div>
                       </form>
                     </Form>
-                  </TabsContent>
-                </CardContent>
-              </Tabs>
-            </Card>
+                  </CardContent>
+                )}
+              </Card>
+            </div>
           </>
         )}
       </div>
