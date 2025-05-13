@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import FocusTimer from "@/components/FocusTimer";
 import StreakDisplay from "@/components/StreakDisplay";
@@ -9,11 +9,12 @@ import RewardBank from "@/components/RewardBank";
 import Calendar from "@/components/Calendar";
 import StatsPage from "@/components/StatsPage";
 import useStreak from "@/hooks/useStreak";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { incrementUserStat } from "@/integrations/supabase/functions";
 
 const Index = () => {
   const { currentStreak, longestStreak, dailyGoalMet, markDailyGoalComplete } = useStreak();
@@ -27,19 +28,9 @@ const Index = () => {
     // Update user stats in Supabase
     if (user) {
       try {
-        // Using proper increment function with typed parameters
-        const { error } = await supabase
-          .from("user_stats")
-          .update({
-            total_focus_time: focusDuration,
-            total_reward_time: Math.floor(focusDuration / 5),
-            sessions_completed: 1
-          })
-          .eq("user_id", user.id);
-          
-        if (error) {
-          console.error("Error updating user stats:", error);
-        }
+        await incrementUserStat(user.id, "total_focus_time", focusDuration);
+        await incrementUserStat(user.id, "total_reward_time", Math.floor(focusDuration / 5));
+        await incrementUserStat(user.id, "sessions_completed", 1);
       } catch (error) {
         console.error("Error in session completion:", error);
       }
@@ -94,7 +85,7 @@ const Index = () => {
         </TabsContent>
       </Tabs>
       
-      <Card className="mt-8 bg-grindtime-blue/10">
+      <Card className="mt-8 bg-grindtime-blue/10 dark:bg-grindtime-blue/5">
         <CardContent className="p-4 text-center">
           <p className="mb-2 text-sm">
             GrindTime helps you balance productivity and rewards.
@@ -103,7 +94,7 @@ const Index = () => {
           <div className="flex justify-center">
             <Button 
               variant="link"
-              className="text-grindtime-blue" 
+              className="text-grindtime-blue dark:text-grindtime-blue/80" 
               onClick={() => window.open("https://docs.grindtime.app", "_blank")}
             >
               Learn More

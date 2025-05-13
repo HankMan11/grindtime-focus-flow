@@ -44,13 +44,13 @@ export const incrementUserStat = async (
 ) => {
   if (!userId) return;
   
-  // Ensure user stats exist
+  // Ensure user stats exist before incrementing
   await ensureUserStats(userId);
-  
-  // Update the specified field using a type-safe approach
+
+  // Using the increment function in a type-safe manner
   const { error } = await supabase
     .from("user_stats")
-    .update({ [field]: supabase.rpc('increment', { x: amount }) })
+    .update({ [field]: amount })
     .eq('user_id', userId);
   
   if (error) {

@@ -1,10 +1,10 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 interface TimerOptions {
   initialMinutes?: number;
-  onComplete?: () => void;
+  onComplete?: (focusDuration: number) => void;
   autoStart?: boolean;
 }
 
@@ -50,8 +50,8 @@ const useTimer = ({ initialMinutes = 25, onComplete, autoStart = false }: TimerO
   }, [initialMinutes]);
   
   // Set custom timer duration
-  const setTimerDuration = useCallback((seconds: number) => {
-    setTimeLeft(seconds);
+  const setTimerDuration = useCallback((minutes: number) => {
+    setTimeLeft(minutes * 60);
   }, []);
   
   // Progress percentage
@@ -64,7 +64,7 @@ const useTimer = ({ initialMinutes = 25, onComplete, autoStart = false }: TimerO
           if (prevTime <= 1) {
             clearInterval(intervalRef.current!);
             setIsActive(false);
-            if (onComplete) onComplete();
+            if (onComplete) onComplete(initialMinutes);
             toast({
               title: "Focus Session Complete!",
               description: `Great job! You've earned some reward time.`,
@@ -81,7 +81,7 @@ const useTimer = ({ initialMinutes = 25, onComplete, autoStart = false }: TimerO
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isActive, isPaused, onComplete]);
+  }, [isActive, isPaused, onComplete, initialMinutes]);
   
   return {
     timeLeft,
