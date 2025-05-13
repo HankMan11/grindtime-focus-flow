@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import useLocalStorage from "./useLocalStorage";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 interface StreakData {
   currentStreak: number;
