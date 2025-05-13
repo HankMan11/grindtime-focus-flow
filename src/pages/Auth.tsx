@@ -10,9 +10,14 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LogIn, UserPlus, ArrowRight, Rocket, Clock, LineChart, Camera, User as UserIcon } from "lucide-react";
+import { LogIn, UserPlus, ArrowRight, Rocket, Clock, LineChart, Camera, User as UserIcon, Check } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserProfile } from "@/contexts/AuthContext";
+import { 
+  InputOTP, 
+  InputOTPGroup, 
+  InputOTPSlot 
+} from "@/components/ui/input-otp";
 
 // Form schema for login
 const loginSchema = z.object({
@@ -31,11 +36,20 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
+// Form schema for OTP verification
+const otpSchema = z.object({
+  otp: z.string().length(6, "Verification code must be 6 characters")
+});
+
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("signup");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [pendingSignupData, setPendingSignupData] = useState<{username: string, email: string, password: string, avatar: string | null} | null>(null);
+  
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -54,6 +68,13 @@ const Auth = () => {
       email: "",
       password: "",
       confirmPassword: "",
+    },
+  });
+
+  const otpForm = useForm<z.infer<typeof otpSchema>>({
+    resolver: zodResolver(otpSchema),
+    defaultValues: {
+      otp: "",
     },
   });
 
@@ -116,9 +137,51 @@ const Auth = () => {
   const handleSignup = async (values: z.infer<typeof signupSchema>) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // Store the signup data for after OTP verification
+      setPendingSignupData({
+        username: values.username,
         email: values.email,
         password: values.password,
+        avatar: avatarUrl
+      });
+      
+      // Request OTP code
+      const { error } = await supabase.auth.signInWithOtp({
+        email: values.email,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setPendingEmail(values.email);
+      setVerifyingEmail(true);
+      toast.success("Verification code sent! Please check your email.");
+      
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sign up");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (values: z.infer<typeof otpSchema>) => {
+    if (!pendingSignupData) {
+      toast.error("Missing signup data. Please try again.");
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Verify the OTP code and sign in
+      const { error, data } = await supabase.auth.verifyOtp({
+        email: pendingSignupData.email,
+        token: values.otp,
+        type: 'email',
       });
 
       if (error) {
@@ -128,17 +191,54 @@ const Auth = () => {
       if (data.user) {
         // Save user profile details in localStorage
         const userProfile: UserProfile = {
-          username: values.username,
-          avatar_url: avatarUrl || "",
+          username: pendingSignupData.username,
+          avatar_url: pendingSignupData.avatar || "",
         };
         localStorage.setItem(`profile-${data.user.id}`, JSON.stringify(userProfile));
 
-        toast.success("Successfully signed up! Please check your email for verification.");
+        toast.success("Account created successfully!");
+        
+        // Set up password for the user
+        const { error: passwordError } = await supabase.auth.updateUser({ 
+          password: pendingSignupData.password 
+        });
+        
+        if (passwordError) {
+          console.error("Error setting password:", passwordError);
+          // Continue anyway since the account is created
+        }
+        
+        navigate("/");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to verify code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resendVerificationCode = async () => {
+    if (!pendingEmail) {
+      toast.error("No email to send verification code to");
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: pendingEmail,
+        options: {
+          shouldCreateUser: false,
+        },
+      });
+
+      if (error) {
+        throw error;
       }
 
-      setActiveTab("login");
+      toast.success("Verification code resent. Please check your email.");
     } catch (error: any) {
-      toast.error(error.message || "Failed to sign up");
+      toast.error(error.message || "Failed to resend verification code");
     } finally {
       setIsLoading(false);
     }
@@ -160,6 +260,82 @@ const Auth = () => {
   const skipIntro = () => {
     setCurrentSlide(slides.length);
   };
+
+  const backToSignup = () => {
+    setVerifyingEmail(false);
+    setPendingSignupData(null);
+  };
+
+  // Render OTP verification screen
+  const renderOtpVerification = () => (
+    <Card className="w-full mt-8">
+      <CardContent className="pt-6">
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Verify Your Email</h2>
+          <p className="text-sm text-muted-foreground">
+            Enter the 6-digit verification code sent to {pendingEmail}
+          </p>
+        </div>
+        
+        <Form {...otpForm}>
+          <form onSubmit={otpForm.handleSubmit(handleVerifyOtp)} className="space-y-4">
+            <FormField
+              control={otpForm.control}
+              name="otp"
+              render={({ field }) => (
+                <FormItem className="flex flex-col items-center">
+                  <FormControl>
+                    <InputOTP maxLength={6} {...field}>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="flex flex-col gap-2 pt-2">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Verifying..." : "Verify Email"}
+                <Check className="ml-2 h-4 w-4" />
+              </Button>
+              
+              <div className="text-center mt-2">
+                <Button 
+                  variant="ghost" 
+                  type="button"
+                  size="sm" 
+                  onClick={resendVerificationCode}
+                  className="text-sm text-muted-foreground hover:text-primary"
+                >
+                  Didn't receive a code? Resend
+                </Button>
+              </div>
+              
+              <div className="text-center mt-1">
+                <Button 
+                  variant="ghost" 
+                  type="button"
+                  size="sm" 
+                  onClick={backToSignup}
+                  className="text-sm text-muted-foreground hover:text-primary"
+                >
+                  Go back to signup
+                </Button>
+              </div>
+            </div>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-secondary/20 px-4 py-8">
@@ -231,166 +407,170 @@ const Auth = () => {
                 </Button>
               </div>
               
-              <Card className="w-full mt-8">
-                {activeTab === "login" ? (
-                  <CardContent className="pt-6">
-                    <div className="mb-6">
-                      <h2 className="text-xl font-semibold mb-2">Welcome Back</h2>
-                      <p className="text-sm text-muted-foreground">Sign in to continue your productivity journey</p>
-                    </div>
-                    <Form {...loginForm}>
-                      <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
-                        <FormField
-                          control={loginForm.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Your email" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={loginForm.control}
-                          name="password"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Password</FormLabel>
-                              <FormControl>
-                                <Input type="password" placeholder="Your password" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <div className="pt-2">
-                          <Button type="submit" className="w-full" disabled={isLoading}>
-                            {isLoading ? "Signing in..." : "Sign In"}
-                          </Button>
-                        </div>
-                        
-                        <div className="text-center mt-4">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setActiveTab("signup")}
-                            className="text-sm text-muted-foreground hover:text-primary"
-                          >
-                            Need an account? Sign up
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                  </CardContent>
-                ) : (
-                  <CardContent className="pt-6">
-                    <div className="mb-6">
-                      <h2 className="text-xl font-semibold mb-2">Create Your Account</h2>
-                      <p className="text-sm text-muted-foreground">Start your productivity journey today</p>
-                    </div>
-                    
-                    <div className="flex flex-col items-center mb-6">
-                      <input 
-                        type="file"
-                        accept="image/*"
-                        ref={avatarInputRef}
-                        className="hidden"
-                        onChange={handleAvatarChange}
-                      />
-                      <div 
-                        className="cursor-pointer relative"
-                        onClick={handleAvatarClick}
-                      >
-                        <Avatar className="h-20 w-20 border-2 border-grindtime-green">
-                          {avatarUrl ? (
-                            <AvatarImage src={avatarUrl} alt="Profile" />
-                          ) : (
-                            <AvatarFallback className="bg-grindtime-purple/20 flex items-center justify-center">
-                              <UserIcon className="h-8 w-8 text-grindtime-purple" />
-                            </AvatarFallback>
-                          )}
-                        </Avatar>
-                        <div className="absolute bottom-0 right-0 bg-grindtime-blue rounded-full p-1">
-                          <Camera className="h-4 w-4 text-white" />
-                        </div>
+              {verifyingEmail ? (
+                renderOtpVerification()
+              ) : (
+                <Card className="w-full mt-8">
+                  {activeTab === "login" ? (
+                    <CardContent className="pt-6">
+                      <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">Welcome Back</h2>
+                        <p className="text-sm text-muted-foreground">Sign in to continue your productivity journey</p>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">Add a profile picture</p>
-                    </div>
-                    
-                    <Form {...signupForm}>
-                      <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
-                        <FormField
-                          control={signupForm.control}
-                          name="username"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Your Name</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Enter your name" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                      <Form {...loginForm}>
+                        <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+                          <FormField
+                            control={loginForm.control}
+                            name="email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Your email" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={loginForm.control}
+                            name="password"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Password</FormLabel>
+                                <FormControl>
+                                  <Input type="password" placeholder="Your password" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <div className="pt-2">
+                            <Button type="submit" className="w-full" disabled={isLoading}>
+                              {isLoading ? "Signing in..." : "Sign In"}
+                            </Button>
+                          </div>
+                          
+                          <div className="text-center mt-4">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setActiveTab("signup")}
+                              className="text-sm text-muted-foreground hover:text-primary"
+                            >
+                              Need an account? Sign up
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  ) : (
+                    <CardContent className="pt-6">
+                      <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">Create Your Account</h2>
+                        <p className="text-sm text-muted-foreground">Start your productivity journey today</p>
+                      </div>
+                      
+                      <div className="flex flex-col items-center mb-6">
+                        <input 
+                          type="file"
+                          accept="image/*"
+                          ref={avatarInputRef}
+                          className="hidden"
+                          onChange={handleAvatarChange}
                         />
-                        
-                        <FormField
-                          control={signupForm.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Your email" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={signupForm.control}
-                          name="password"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Password</FormLabel>
-                              <FormControl>
-                                <Input type="password" placeholder="Create a password" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={signupForm.control}
-                          name="confirmPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Confirm Password</FormLabel>
-                              <FormControl>
-                                <Input type="password" placeholder="Confirm your password" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <div className="pt-2">
-                          <Button type="submit" className="w-full" disabled={isLoading}>
-                            {isLoading ? "Creating Account..." : "Create Account"}
-                            <UserPlus className="ml-2 h-4 w-4" />
-                          </Button>
+                        <div 
+                          className="cursor-pointer relative"
+                          onClick={handleAvatarClick}
+                        >
+                          <Avatar className="h-20 w-20 border-2 border-grindtime-green">
+                            {avatarUrl ? (
+                              <AvatarImage src={avatarUrl} alt="Profile" />
+                            ) : (
+                              <AvatarFallback className="bg-grindtime-purple/20 flex items-center justify-center">
+                                <UserIcon className="h-8 w-8 text-grindtime-purple" />
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div className="absolute bottom-0 right-0 bg-grindtime-blue rounded-full p-1">
+                            <Camera className="h-4 w-4 text-white" />
+                          </div>
                         </div>
-                      </form>
-                    </Form>
-                  </CardContent>
-                )}
-              </Card>
+                        <p className="text-xs text-muted-foreground mt-2">Add a profile picture</p>
+                      </div>
+                      
+                      <Form {...signupForm}>
+                        <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
+                          <FormField
+                            control={signupForm.control}
+                            name="username"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Your Name</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Enter your name" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={signupForm.control}
+                            name="email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Your email" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={signupForm.control}
+                            name="password"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Password</FormLabel>
+                                <FormControl>
+                                  <Input type="password" placeholder="Create a password" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={signupForm.control}
+                            name="confirmPassword"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Confirm Password</FormLabel>
+                                <FormControl>
+                                  <Input type="password" placeholder="Confirm your password" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <div className="pt-2">
+                            <Button type="submit" className="w-full" disabled={isLoading}>
+                              {isLoading ? "Creating Account..." : "Create Account"}
+                              <UserPlus className="ml-2 h-4 w-4" />
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  )}
+                </Card>
+              )}
             </div>
           </>
         )}
