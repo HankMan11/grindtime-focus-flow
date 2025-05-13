@@ -29,9 +29,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
+    console.log("AuthProvider initializing");
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state changed:", event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -39,7 +42,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Fetch user profile from localStorage
           const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
           if (storedProfile) {
+            console.log("Found stored profile for user", session.user.id);
             setUserProfile(JSON.parse(storedProfile));
+          } else {
+            console.log("No stored profile found for user", session.user.id);
+            setUserProfile(null);
           }
         } else {
           setUserProfile(null);
@@ -51,6 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial session check:", session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -58,14 +66,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Fetch user profile from localStorage
         const storedProfile = localStorage.getItem(`profile-${session.user.id}`);
         if (storedProfile) {
+          console.log("Found stored profile for user", session.user.id);
           setUserProfile(JSON.parse(storedProfile));
+        } else {
+          console.log("No stored profile found for user", session.user.id);
         }
       }
       
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log("Cleaning up auth subscription");
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

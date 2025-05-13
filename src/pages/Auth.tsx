@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -145,8 +144,8 @@ const Auth = () => {
         avatar: avatarUrl
       });
       
-      // Request OTP code
-      const { error } = await supabase.auth.signInWithOtp({
+      // Send the OTP code
+      const { error, data } = await supabase.auth.signInWithOtp({
         email: values.email,
         options: {
           shouldCreateUser: true,
@@ -157,11 +156,16 @@ const Auth = () => {
         throw error;
       }
 
+      console.log("OTP request response:", data);
+      
       setPendingEmail(values.email);
       setVerifyingEmail(true);
-      toast.success("Verification code sent! Please check your email.");
+      toast.success("Verification code sent! Please check your email (including spam folder).", {
+        duration: 6000,
+      });
       
     } catch (error: any) {
+      console.error("Signup error:", error);
       toast.error(error.message || "Failed to sign up");
     } finally {
       setIsLoading(false);
@@ -177,12 +181,16 @@ const Auth = () => {
     setIsLoading(true);
     
     try {
+      console.log("Verifying OTP:", values.otp, "for email:", pendingSignupData.email);
+      
       // Verify the OTP code and sign in
       const { error, data } = await supabase.auth.verifyOtp({
         email: pendingSignupData.email,
         token: values.otp,
         type: 'email',
       });
+
+      console.log("OTP verification response:", { error, data });
 
       if (error) {
         throw error;
@@ -209,8 +217,11 @@ const Auth = () => {
         }
         
         navigate("/");
+      } else {
+        toast.error("Verification successful but no user data returned. Please try logging in.");
       }
     } catch (error: any) {
+      console.error("Verification error:", error);
       toast.error(error.message || "Failed to verify code");
     } finally {
       setIsLoading(false);
@@ -225,7 +236,7 @@ const Auth = () => {
     
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error, data } = await supabase.auth.signInWithOtp({
         email: pendingEmail,
         options: {
           shouldCreateUser: false,
@@ -235,9 +246,14 @@ const Auth = () => {
       if (error) {
         throw error;
       }
+      
+      console.log("Resend OTP response:", data);
 
-      toast.success("Verification code resent. Please check your email.");
+      toast.success("Verification code resent. Please check your email (including spam folder).", {
+        duration: 6000,
+      });
     } catch (error: any) {
+      console.error("Resend error:", error);
       toast.error(error.message || "Failed to resend verification code");
     } finally {
       setIsLoading(false);
@@ -272,8 +288,11 @@ const Auth = () => {
       <CardContent className="pt-6">
         <div className="mb-6">
           <h2 className="text-xl font-semibold mb-2">Verify Your Email</h2>
-          <p className="text-sm text-muted-foreground">
-            Enter the 6-digit verification code sent to {pendingEmail}
+          <p className="text-sm text-muted-foreground mb-1">
+            Enter the 6-digit verification code sent to <span className="font-medium">{pendingEmail}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Please check both your inbox and spam/junk folder
           </p>
         </div>
         
@@ -314,6 +333,7 @@ const Auth = () => {
                   size="sm" 
                   onClick={resendVerificationCode}
                   className="text-sm text-muted-foreground hover:text-primary"
+                  disabled={isLoading}
                 >
                   Didn't receive a code? Resend
                 </Button>
@@ -326,6 +346,7 @@ const Auth = () => {
                   size="sm" 
                   onClick={backToSignup}
                   className="text-sm text-muted-foreground hover:text-primary"
+                  disabled={isLoading}
                 >
                   Go back to signup
                 </Button>
