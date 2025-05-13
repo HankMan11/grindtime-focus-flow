@@ -10,9 +10,11 @@ import useStreak from "@/hooks/useStreak";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const { currentStreak, longestStreak, dailyGoalMet, markDailyGoalComplete } = useStreak();
+  const { userProfile } = useAuth();
   const [stats, setStats] = useLocalStorage("grindtime-stats", {
     totalFocusTime: 0,
     totalRewardTime: 0,
@@ -27,7 +29,9 @@ const Index = () => {
 
   return (
     <AppLayout>
-      <h1 className="text-2xl font-bold mb-6">Welcome to GrindTime</h1>
+      <h1 className="text-2xl font-bold mb-6">
+        Welcome{userProfile?.username ? `, ${userProfile.username}` : " to GrindTime"}
+      </h1>
       
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">

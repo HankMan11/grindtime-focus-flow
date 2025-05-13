@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bell, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, Link } from "react-router-dom";
@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const Header = () => {
   const [activePage, setActivePage] = useState("home");
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -23,10 +23,15 @@ const Header = () => {
     }
   };
 
-  // Get user initials for avatar
-  const getUserInitials = () => {
-    if (!user?.email) return "GT";
-    return user.email.substring(0, 2).toUpperCase();
+  // Get user display name or initials
+  const getUserDisplay = () => {
+    if (userProfile?.username) {
+      return userProfile.username.substring(0, 2).toUpperCase();
+    }
+    if (user?.email) {
+      return user.email.substring(0, 2).toUpperCase();
+    }
+    return "GT";
   };
   
   return (
@@ -67,9 +72,13 @@ const Header = () => {
                 <span className="absolute top-0 right-0 w-2 h-2 bg-grindtime-purple rounded-full"></span>
               </Button>
               <Avatar className="h-8 w-8 border-2 border-grindtime-green">
-                <AvatarFallback className="bg-grindtime-purple/20 text-grindtime-purple">
-                  {getUserInitials()}
-                </AvatarFallback>
+                {userProfile?.avatar_url ? (
+                  <AvatarImage src={userProfile.avatar_url} alt={userProfile.username || "User"} />
+                ) : (
+                  <AvatarFallback className="bg-grindtime-purple/20 text-grindtime-purple">
+                    {getUserDisplay()}
+                  </AvatarFallback>
+                )}
               </Avatar>
               <Button size="sm" variant="ghost" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />

@@ -1,17 +1,18 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LogIn, UserPlus, ArrowRight, Rocket, Clock, LineChart } from "lucide-react";
+import { LogIn, UserPlus, ArrowRight, Rocket, Clock, LineChart, Camera, User as UserIcon } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserProfile } from "@/contexts/AuthContext";
 
 // Form schema for login
 const loginSchema = z.object({
@@ -21,6 +22,7 @@ const loginSchema = z.object({
 
 // Form schema for signup
 const signupSchema = z.object({
+  username: z.string().min(2, "Username must be at least 2 characters"),
   email: z.string().email("Please enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
@@ -33,6 +35,8 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("signup");
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -46,6 +50,7 @@ const Auth = () => {
   const signupForm = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
+      username: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -91,10 +96,27 @@ const Auth = () => {
     }
   };
 
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setAvatarUrl(e.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    avatarInputRef.current?.click();
+  };
+
   const handleSignup = async (values: z.infer<typeof signupSchema>) => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
       });
@@ -103,7 +125,17 @@ const Auth = () => {
         throw error;
       }
 
-      toast.success("Successfully signed up! Please check your email for verification.");
+      if (data.user) {
+        // Save user profile details in localStorage
+        const userProfile: UserProfile = {
+          username: values.username,
+          avatar_url: avatarUrl || "",
+        };
+        localStorage.setItem(`profile-${data.user.id}`, JSON.stringify(userProfile));
+
+        toast.success("Successfully signed up! Please check your email for verification.");
+      }
+
       setActiveTab("login");
     } catch (error: any) {
       toast.error(error.message || "Failed to sign up");
@@ -261,8 +293,51 @@ const Auth = () => {
                       <h2 className="text-xl font-semibold mb-2">Create Your Account</h2>
                       <p className="text-sm text-muted-foreground">Start your productivity journey today</p>
                     </div>
+                    
+                    <div className="flex flex-col items-center mb-6">
+                      <input 
+                        type="file"
+                        accept="image/*"
+                        ref={avatarInputRef}
+                        className="hidden"
+                        onChange={handleAvatarChange}
+                      />
+                      <div 
+                        className="cursor-pointer relative"
+                        onClick={handleAvatarClick}
+                      >
+                        <Avatar className="h-20 w-20 border-2 border-grindtime-green">
+                          {avatarUrl ? (
+                            <AvatarImage src={avatarUrl} alt="Profile" />
+                          ) : (
+                            <AvatarFallback className="bg-grindtime-purple/20 flex items-center justify-center">
+                              <UserIcon className="h-8 w-8 text-grindtime-purple" />
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                        <div className="absolute bottom-0 right-0 bg-grindtime-blue rounded-full p-1">
+                          <Camera className="h-4 w-4 text-white" />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">Add a profile picture</p>
+                    </div>
+                    
                     <Form {...signupForm}>
                       <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
+                        <FormField
+                          control={signupForm.control}
+                          name="username"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Your Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Enter your name" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
                         <FormField
                           control={signupForm.control}
                           name="email"
